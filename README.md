@@ -6,6 +6,10 @@ The key bindings have been default to work with a standard TV remote but can be 
 
 The motivation for this plugin was to load Slopsmith from a Smart TV's browser.
 
+## Installation
+cd /path/to/slopsmith/plugins
+https://github.com/jackipicco/slopsmith-plugin-key-bindings.git key_bindings
+
 ## Default Bindings
 
 | Action | Key Binding | Description |
