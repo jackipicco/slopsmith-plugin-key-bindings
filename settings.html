@@ -1,0 +1,207 @@
+<div id="kb-settings" class="mb-6">
+  <h3 class="text-sm font-semibold text-gray-200 mb-3">Keybindings</h3>
+  <p class="text-xs text-gray-400 mb-3">
+    Click a field then press any key to assign it. Set to
+    <span class="font-mono text-gray-300">Unset</span> to disable.
+  </p>
+
+  <div id="kb-rows" class="space-y-2"></div>
+
+  <div class="flex gap-2 mt-4">
+    <button id="kb-save"
+      class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm text-white">
+      Save
+    </button>
+    <button id="kb-reset"
+      class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-300">
+      Reset to defaults
+    </button>
+  </div>
+
+  <p id="kb-status" class="text-xs mt-2 text-green-400 hidden">Saved.</p>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var STORAGE_KEY = 'keybindings.config';
+
+  var DEFAULTS = {
+    seekBack:      '1',
+    togglePlay:    '2',
+    seekForward:   '3',
+    setLoopStart:  '4',
+    clearLoop:     '5',
+    setLoopEnd:    '6',
+    arrSelect:     '7',
+    vizPicker:     '8',
+    qualitySelect: '9',
+  };
+
+  var LABELS = {
+    seekBack:      'Seek back 5 s',
+    togglePlay:    'Play / Pause',
+    seekForward:   'Seek forward 5 s',
+    setLoopStart:  'Set loop start (A)',
+    clearLoop:     'Clear loop',
+    setLoopEnd:    'Set loop end (B)',
+    arrSelect:     'Arrangement selector',
+    vizPicker:     'Viz picker',
+    qualitySelect: 'Quality selector',
+  };
+
+  function loadBindings() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (saved && typeof saved === 'object') {
+        var merged = {};
+        Object.keys(DEFAULTS).forEach(function (a) {
+          merged[a] = (saved[a] !== undefined) ? saved[a] : DEFAULTS[a];
+        });
+        return merged;
+      }
+    } catch (e) { /* ignore */ }
+    return Object.assign({}, DEFAULTS);
+  }
+
+  // Current in-memory state while the user edits
+  var current = loadBindings();
+
+  // ── build the rows ─────────────────────────────────────────────
+
+  var container = document.getElementById('kb-rows');
+  var inputs = {}; // action → <input> element
+  var activeInput = null; // the input currently listening for a key
+
+  function displayKey(key) {
+    if (!key || key === 'Unset') return 'Unset';
+    // Make special keys readable
+    var map = {
+      ' ': 'Space', 'ArrowLeft': '←', 'ArrowRight': '→',
+      'ArrowUp': '↑', 'ArrowDown': '↓', 'Escape': 'Esc',
+      'Enter': 'Enter', 'Backspace': 'Backspace', 'Delete': 'Del',
+      'Tab': 'Tab',
+    };
+    return map[key] || key;
+  }
+
+  Object.keys(LABELS).forEach(function (action) {
+    var row = document.createElement('div');
+    row.className = 'flex items-center justify-between gap-3';
+
+    var label = document.createElement('span');
+    label.className = 'text-sm text-gray-300 flex-1';
+    label.textContent = LABELS[action];
+
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.readOnly = true;
+    input.value = displayKey(current[action]);
+    input.className = [
+      'w-28 text-center text-sm cursor-pointer select-none',
+      'bg-gray-800 border border-gray-600 rounded px-2 py-1',
+      'text-gray-200 focus:outline-none focus:border-blue-500',
+      'hover:border-gray-400',
+    ].join(' ');
+    input.title = 'Click to assign a key';
+
+    input.addEventListener('focus', function () {
+      // Deactivate any previously active input
+      if (activeInput && activeInput !== input) {
+        activeInput.classList.remove('border-blue-400', 'ring-1', 'ring-blue-500');
+        activeInput.placeholder = '';
+      }
+      activeInput = input;
+      input.classList.add('border-blue-400', 'ring-1', 'ring-blue-500');
+      input.value = '';
+      input.placeholder = 'press a key…';
+    });
+
+    input.addEventListener('blur', function () {
+      input.classList.remove('border-blue-400', 'ring-1', 'ring-blue-500');
+      input.placeholder = '';
+      // Restore the stored value if nothing was captured
+      if (!input.value) input.value = displayKey(current[action]);
+      if (activeInput === input) activeInput = null;
+    });
+
+    input.addEventListener('click', function () {
+      input.focus();
+    });
+
+    inputs[action] = input;
+    row.appendChild(label);
+
+    // "Unset" button next to the input
+    var unsetBtn = document.createElement('button');
+    unsetBtn.textContent = '✕';
+    unsetBtn.title = 'Unset this binding';
+    unsetBtn.className = 'text-gray-500 hover:text-gray-300 text-xs px-1';
+    unsetBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      current[action] = 'Unset';
+      input.value = 'Unset';
+      input.blur();
+    });
+
+    row.appendChild(input);
+    row.appendChild(unsetBtn);
+    container.appendChild(row);
+  });
+
+  // ── global keydown handler — only active when an input is focused ──
+
+  document.addEventListener('keydown', function (e) {
+    if (!activeInput) return;
+
+    // Find which action this input belongs to
+    var targetAction = null;
+    Object.keys(inputs).forEach(function (a) {
+      if (inputs[a] === activeInput) targetAction = a;
+    });
+    if (!targetAction) return;
+
+    // Ignore pure modifier key presses
+    if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'].indexOf(e.key) !== -1) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    current[targetAction] = e.key;
+    activeInput.value = displayKey(e.key);
+    activeInput.blur();
+  }, true); // capture phase so we beat slopsmith's shortcut handler
+
+  // ── save / reset ───────────────────────────────────────────────
+
+  var statusEl = document.getElementById('kb-status');
+  var statusTimer = null;
+
+  function showStatus(msg, color) {
+    statusEl.textContent = msg;
+    statusEl.className = 'text-xs mt-2 ' + (color || 'text-green-400');
+    statusEl.classList.remove('hidden');
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(function () { statusEl.classList.add('hidden'); }, 2500);
+  }
+
+  document.getElementById('kb-save').addEventListener('click', function () {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+    // Tell screen.js to re-register shortcuts
+    if (window.slopsmith && typeof window.slopsmith.emit === 'function') {
+      window.slopsmith.emit('keybindings:updated');
+    }
+    showStatus('Saved.', 'text-green-400');
+  });
+
+  document.getElementById('kb-reset').addEventListener('click', function () {
+    current = Object.assign({}, DEFAULTS);
+    Object.keys(inputs).forEach(function (action) {
+      inputs[action].value = displayKey(current[action]);
+    });
+    showStatus('Reset to defaults — click Save to apply.', 'text-yellow-400');
+  });
+
+})();
+</script>

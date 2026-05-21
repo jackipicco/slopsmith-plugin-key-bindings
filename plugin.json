@@ -1,0 +1,9 @@
+{
+  "id": "key_bindings",
+  "name": "Keybindings",
+  "version": "1.0.0",
+  "script": "screen.js",
+  "settings": {
+    "html": "settings.html"
+  }
+}
